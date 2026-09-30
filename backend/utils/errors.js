@@ -32,8 +32,8 @@ export function classifyExternalError(error, stage) {
   const status = Number(error?.status || error?.statusCode || 0);
 
   if (error instanceof AppError) return error;
-  if (status === 401 || status === 403 || /api key/i.test(message)) {
-    return new AppError('API_ERROR', 'The AI service rejected the request', {
+  if (status === 401 || status === 403 || /api[_ ]key/i.test(message)) {
+    return new AppError('API_ERROR', 'The Gemini API key was rejected. Check GEMINI_API_KEY.', {
       status: 502,
       stage,
       recoverable: false,

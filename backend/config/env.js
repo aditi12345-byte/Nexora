@@ -52,8 +52,8 @@ export function assertRuntimeConfig() {
   const config = getConfig();
   const missing = [];
 
-  if (!config.jwtSecret || config.jwtSecret.length < 16) {
-    missing.push('JWT_SECRET (minimum 16 characters)');
+  if (!config.jwtSecret || config.jwtSecret.length < 8) {
+    missing.push('JWT_SECRET (minimum 8 characters)');
   }
   if (config.databaseMode === 'supabase') {
     if (!config.supabaseUrl) missing.push('SUPABASE_URL');
