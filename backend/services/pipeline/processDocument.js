@@ -13,6 +13,39 @@ import { needsHumanReview } from '../validation/confidence.js';
 import { validateExtraction } from '../validation/schemaValidation.js';
 
 const locks = new Set();
+const INTERRUPTED_STATUSES = ['QUEUED', 'VALIDATING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING', 'VALIDATING_DATA'];
+const STALE_MS = Number(process.env.PROCESSING_STALE_MS || 90000);
+
+export async function failStaleProcessing(documents) {
+  const store = getStore();
+  const now = Date.now();
+  const next = [];
+  for (const doc of documents) {
+    const age = now - new Date(doc.updatedAt).getTime();
+    if (!INTERRUPTED_STATUSES.includes(doc.status) || !Number.isFinite(age) || age < STALE_MS) {
+      next.push(doc);
+      continue;
+    }
+    console.error(JSON.stringify({
+      code: 'PROCESSING_INTERRUPTED',
+      message: 'Processing stopped before it finished',
+      documentId: doc.id,
+      userId: doc.userId,
+      stage: doc.status,
+    }));
+    const failed = await store.updateDocument(doc.id, {
+      status: 'FAILED',
+      errorCode: 'OCR_ERROR',
+      errorMessage: 'Processing stopped before it finished. Open the document and run it again.',
+      errorStage: doc.status === 'OCR_PROCESSING' ? 'ocr' : 'pipeline',
+      errorDetails: [],
+      recoverable: true,
+      updatedAt: new Date().toISOString(),
+    });
+    next.push(failed || doc);
+  }
+  return next;
+}
 
 async function setStatus(id, status, extra = {}) {
   return getStore().updateDocument(id, {
@@ -284,6 +317,14 @@ export async function processDocument(documentId, userId, deps = {}) {
     return store.getDocument(documentId);
   } catch (error) {
     const appError = toAppError(error);
+    console.error(JSON.stringify({
+      code: appError.code,
+      message: appError.message,
+      documentId,
+      userId,
+      stage: appError.stage || 'pipeline',
+      cause: String(error?.message || '').slice(0, 300),
+    }));
     try {
       await setStatus(documentId, 'FAILED', {
         errorCode: appError.code,

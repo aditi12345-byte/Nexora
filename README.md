@@ -159,6 +159,7 @@ Check this list before deploying:
 - Extraction fails with `CONFIGURATION_ERROR`: add `GEMINI_API_KEY`.
 - Health shows `database.status: error`: the Supabase URL or key is wrong, or `schema.sql` has not been run.
 - OCR text is empty: use a higher-contrast image. Scanned PDFs are rendered and OCR'd when page rendering works. If rendering fails and the PDF has a text layer, Folio uses that text and marks confidence unavailable, which sends extracted fields to review.
+- A document stays on `OCR_PROCESSING`: the API ships `backend/ocr-data/eng.traineddata` and `backend/tesseract-core` so Tesseract does not download an engine at runtime. If the host stops the request before it can save a result, the next document or dashboard load marks that job `FAILED` with a retry message. Retry runs OCR again. It does not invent text.
 - A value you expected is null: it was not found in the OCR text. Check the OCR page, then correct it in Review. The correction still has to match the schema.
 
 ## Limitations

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Alert from '../components/Alert';
 import api, { errorMessage } from '../services/api';
-import { formatConfidence } from '../utils/format';
+import { formatConfidence, isProcessing } from '../utils/format';
 
 export default function OcrResultsPage() {
   const { id } = useParams();
@@ -14,25 +14,47 @@ export default function OcrResultsPage() {
   const [activeBox, setActiveBox] = useState(null);
 
   useEffect(() => {
-    let revoked = [];
-    Promise.all([
-      api.get(`/api/documents/${id}/ocr`),
-      api.get(`/api/documents/${id}`),
-    ]).then(async ([ocr, doc]) => {
-      setData(ocr.data.data);
-      const pageRows = doc.data.data.pages || [];
-      setPages(pageRows);
-      const urls = {};
-      for (const page of pageRows.filter((item) => item.hasImage)) {
-        const image = await api.get(`/api/documents/${id}/pages/${page.pageNumber}/image`, { responseType: 'blob' });
-        const url = URL.createObjectURL(image.data);
-        urls[page.pageNumber] = url;
-        revoked.push(url);
+    let stopped = false;
+    let timer;
+    const revoked = [];
+
+    async function load() {
+      try {
+        const [ocr, doc] = await Promise.all([
+          api.get(`/api/documents/${id}/ocr`),
+          api.get(`/api/documents/${id}`),
+        ]);
+        if (stopped) return;
+        setData(ocr.data.data);
+        const pageRows = doc.data.data.pages || [];
+        setPages(pageRows);
+        const urls = {};
+        for (const page of pageRows.filter((item) => item.hasImage)) {
+          const image = await api.get(`/api/documents/${id}/pages/${page.pageNumber}/image`, { responseType: 'blob' });
+          if (stopped) return;
+          const url = URL.createObjectURL(image.data);
+          urls[page.pageNumber] = url;
+          revoked.push(url);
+        }
+        setImages((current) => ({ ...current, ...urls }));
+        setError('');
+        setLoading(false);
+        const status = doc.data.data.document.status;
+        const stored = ocr.data.data.pages || [];
+        if (isProcessing(status) && stored.length === 0) timer = setTimeout(load, 3000);
+      } catch (err) {
+        if (stopped) return;
+        setError(errorMessage(err));
+        setLoading(false);
       }
-      setImages(urls);
-    }).catch((err) => setError(errorMessage(err)))
-      .finally(() => setLoading(false));
-    return () => revoked.forEach((url) => URL.revokeObjectURL(url));
+    }
+
+    load();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      revoked.forEach((url) => URL.revokeObjectURL(url));
+    };
   }, [id]);
 
   if (loading) return <p>Loading OCR…</p>;

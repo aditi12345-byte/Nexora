@@ -9,6 +9,7 @@ logs/
 backend/data/
 coverage/
 *.traineddata
+!backend/ocr-data/eng.traineddata
 .DS_Store
 *.log
 .vercel/

@@ -1,4 +1,4 @@
-const API_ORIGIN = 'https://temporary-brisk-draco-3b3yig9.vercel.app';
+const API_ORIGIN = 'https://temporary-prompt-breeze-cr6l2ht.vercel.app';
 
 export const config = {
   api: {

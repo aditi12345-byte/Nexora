@@ -1,14 +1,33 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { AppError } from '../../utils/errors.js';
-import { transcribeImage } from '../extraction/geminiExtractor.js';
 import { fromTesseractConfidence } from '../validation/confidence.js';
+import './traceTesseract.js';
+
+const langDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../ocr-data');
+const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS || 40000);
 
 let workerPromise;
+
+function abandonWorker() {
+  const pending = workerPromise;
+  workerPromise = null;
+  if (!pending) return;
+  pending
+    .then((worker) => worker.terminate())
+    .catch(() => {});
+}
 
 async function getWorker() {
   if (!workerPromise) {
     workerPromise = (async () => {
       const { createWorker } = await import('tesseract.js');
-      return createWorker('eng');
+      return createWorker('eng', 1, {
+        workerPath: path.join(path.dirname(fileURLToPath(import.meta.url)), 'tesseractWorker.cjs'),
+        langPath: langDir,
+        cachePath: process.env.VERCEL ? '/tmp/tesseract-cache' : path.join(langDir, '.cache'),
+        gzip: false,
+      });
     })();
   }
   try {
@@ -20,22 +39,22 @@ async function getWorker() {
 }
 
 export async function recognizeImage(buffer) {
-  if (process.env.VERCEL || process.env.OCR_ENGINE === 'gemini') {
-    try {
-      return await transcribeImage(buffer);
-    } catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError('OCR_ERROR', 'Document OCR processing failed', {
-        status: 422,
-        stage: 'ocr',
-        recoverable: true,
-      });
-    }
-  }
-
+  let timer;
   try {
-    const worker = await getWorker();
-    const result = await worker.recognize(buffer, {}, { blocks: true });
+    const result = await Promise.race([
+      (async () => {
+        const worker = await getWorker();
+        return worker.recognize(buffer, {}, { blocks: true });
+      })(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error('OCR timed out');
+          error.name = 'TimeoutError';
+          reject(error);
+        }, OCR_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
     const data = result?.data || {};
     const words = [];
     for (const block of data.blocks || []) {
@@ -72,8 +91,23 @@ export async function recognizeImage(buffer) {
       blocks: words,
     };
   } catch (error) {
+    clearTimeout(timer);
     if (error instanceof AppError) throw error;
-    throw new AppError('OCR_ERROR', 'Document OCR processing failed', {
+    if (error?.name === 'TimeoutError') {
+      abandonWorker();
+      throw new AppError('OCR_ERROR', 'OCR did not finish in time', {
+        status: 422,
+        stage: 'ocr',
+        recoverable: true,
+      });
+    }
+    console.error(JSON.stringify({
+      code: 'OCR_ERROR',
+      message: error?.message || 'Document OCR processing failed',
+      name: error?.name || 'Error',
+    }));
+    const detail = String(error?.message || error || 'unknown OCR error').slice(0, 300);
+    throw new AppError('OCR_ERROR', `Document OCR processing failed: ${detail}`, {
       status: 422,
       stage: 'ocr',
       recoverable: true,

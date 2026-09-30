@@ -6,7 +6,7 @@ import { getConfig } from '../config/env.js';
 import { getStore } from '../models/store.js';
 import { recordAudit } from '../services/audit/auditService.js';
 import { validateUploadedFile } from '../services/ingestion/fileValidation.js';
-import { processDocument } from '../services/pipeline/processDocument.js';
+import { failStaleProcessing, processDocument } from '../services/pipeline/processDocument.js';
 import { readBytes, removeBytes, saveBytes } from '../services/storage/fileStore.js';
 import { AppError } from '../utils/errors.js';
 import { toPublicDocument } from '../utils/files.js';
@@ -101,7 +101,7 @@ export async function uploadDocument(req, res, next) {
 
 export async function listDocuments(req, res, next) {
   try {
-    const documents = await getStore().listDocuments(req.user.sub);
+    const documents = await failStaleProcessing(await getStore().listDocuments(req.user.sub));
     sendSuccess(res, { documents: documents.map(toPublicDocument) });
   } catch (error) {
     next(error);
@@ -110,7 +110,7 @@ export async function listDocuments(req, res, next) {
 
 export async function getDocument(req, res, next) {
   try {
-    const document = await ownedDocument(req.params.id, req.user.sub);
+    const [document] = await failStaleProcessing([await ownedDocument(req.params.id, req.user.sub)]);
     const pages = await getStore().listPages(document.id);
     sendSuccess(res, {
       document: toPublicDocument(document),
