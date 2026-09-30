@@ -1,4 +1,4 @@
-const API_ORIGIN = 'https://temporary-speedy-krypton-jpowuge.vercel.app';
+const API_ORIGIN = 'https://temporary-brisk-draco-3b3yig9.vercel.app';
 
 export const config = {
   api: {
