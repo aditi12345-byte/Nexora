@@ -156,7 +156,7 @@ export async function startProcessing(req, res, next) {
     }
 
     const pending = processDocument(document.id, req.user.sub);
-    if (process.env.SYNC_PROCESSING === 'true') {
+    if (process.env.SYNC_PROCESSING === 'true' || process.env.VERCEL) {
       const updated = await pending;
       sendSuccess(res, { document: toPublicDocument(updated) }, 'Processing completed successfully');
       return;

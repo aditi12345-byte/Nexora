@@ -73,6 +73,54 @@ export function parseModelJson(text) {
   }
 }
 
+export async function transcribeImage(buffer) {
+  const config = getConfig();
+  if (!config.geminiApiKey) {
+    throw new AppError('CONFIGURATION_ERROR', 'GEMINI_API_KEY is not configured', {
+      status: 503,
+      stage: 'ocr',
+      recoverable: true,
+    });
+  }
+
+  const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+  const models = modelsToTry(config.geminiModel);
+  let lastError;
+  for (const model of models) {
+    try {
+      const response = await Promise.race([
+        ai.models.generateContent({
+          model,
+          contents: [
+            {
+              text: 'Transcribe the visible text in this document image. Keep the original line breaks. Do not add headings, translations, or words that are not visible. If nothing is readable, return an empty string.',
+            },
+            { inlineData: { mimeType: 'image/png', data: Buffer.from(buffer).toString('base64') } },
+          ],
+          config: { temperature: 0, maxOutputTokens: 4096 },
+        }),
+        new Promise((_, reject) => {
+          const error = new Error('timeout');
+          error.name = 'TimeoutError';
+          setTimeout(() => reject(error), config.geminiTimeoutMs);
+        }),
+      ]);
+      const text = typeof response?.text === 'string' ? response.text.trim() : '';
+      return {
+        text,
+        confidence: null,
+        confidenceAvailable: false,
+        words: [],
+        blocks: text ? [{ text, confidence: null, confidenceAvailable: false, bbox: null }] : [],
+      };
+    } catch (error) {
+      lastError = error;
+      if (!retryableModelError(error) && !(Number(error?.status) === 400)) break;
+    }
+  }
+  throw classifyExternalError(lastError, 'ocr');
+}
+
 export async function extractWithGemini({ filename, ocrPages }) {
   const config = getConfig();
   if (!config.geminiApiKey) {

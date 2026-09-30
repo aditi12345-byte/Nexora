@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Alert from '../components/Alert';
 import api, { errorMessage } from '../services/api';
-import { formatConfidence } from '../utils/format';
+import { formatConfidence, isProcessing } from '../utils/format';
 
 export default function ExtractedDataPage() {
   const { id } = useParams();
@@ -10,16 +10,39 @@ export default function ExtractedDataPage() {
   const [validation, setValidation] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
-    Promise.all([
-      api.get(`/api/documents/${id}/extraction`),
-      api.get(`/api/documents/${id}/validation`),
-    ]).then(([extraction, checks]) => {
-      setData(extraction.data.data);
-      setValidation(checks.data.data.results || []);
-    }).catch((err) => setError(errorMessage(err)))
-      .finally(() => setLoading(false));
+    let stopped = false;
+    let timer;
+
+    async function load() {
+      try {
+        const [extraction, checks, document] = await Promise.all([
+          api.get(`/api/documents/${id}/extraction`),
+          api.get(`/api/documents/${id}/validation`),
+          api.get(`/api/documents/${id}`),
+        ]);
+        if (stopped) return;
+        setData(extraction.data.data);
+        setValidation(checks.data.data.results || []);
+        const nextStatus = document.data.data.document.status;
+        setStatus(nextStatus);
+        setError('');
+        setLoading(false);
+        if (isProcessing(nextStatus)) timer = setTimeout(load, 3000);
+      } catch (err) {
+        if (stopped) return;
+        setError(errorMessage(err));
+        setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }, [id]);
 
   if (loading) return <p>Loading extracted data…</p>;
@@ -31,7 +54,15 @@ export default function ExtractedDataPage() {
       <p className="text-sm"><Link className="underline" to={`/documents/${id}`}>Back to document</Link></p>
       <h1 className="mt-2 font-serif text-4xl">Extracted data</h1>
       <p className="mt-2 text-sm text-stone-600">Class: {data.documentType || 'Not available'}. Missing values stay empty.</p>
-      {fields.length === 0 ? <p className="mt-6 text-sm">Nothing has been extracted yet.</p> : (
+      {fields.length === 0 ? (
+        <p className="mt-6 text-sm">
+          {isProcessing(status)
+            ? 'The document is still being read. Extracted fields will appear here when that finishes.'
+            : status === 'FAILED'
+              ? 'Reading this document failed. Open the document and retry processing.'
+              : 'Nothing has been extracted yet.'}
+        </p>
+      ) : (
         <div className="mt-6 overflow-x-auto rounded-xl border border-stone-200 bg-white">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-stone-50 text-stone-500">

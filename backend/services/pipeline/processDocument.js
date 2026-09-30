@@ -99,10 +99,13 @@ export async function processDocument(documentId, userId, deps = {}) {
     const ocrPages = [];
     for (const page of prepared.pages) {
       let ocr;
-      if (page.pngBuffer) {
+      const textLayer = String(page.textLayer || '').trim();
+      if (textLayer.replace(/\s+/g, '').length >= 20) {
+        ocr = textLayerResult(textLayer);
+      } else if (page.pngBuffer) {
         ocr = await recognize(page.pngBuffer);
-      } else if (page.textLayer) {
-        ocr = textLayerResult(page.textLayer);
+      } else if (textLayer) {
+        ocr = textLayerResult(textLayer);
       } else {
         throw new AppError('OCR_ERROR', 'No image or text was available for OCR', {
           status: 422,

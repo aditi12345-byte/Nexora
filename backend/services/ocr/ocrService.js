@@ -1,4 +1,5 @@
 import { AppError } from '../../utils/errors.js';
+import { transcribeImage } from '../extraction/geminiExtractor.js';
 import { fromTesseractConfidence } from '../validation/confidence.js';
 
 let workerPromise;
@@ -19,6 +20,19 @@ async function getWorker() {
 }
 
 export async function recognizeImage(buffer) {
+  if (process.env.VERCEL || process.env.OCR_ENGINE === 'gemini') {
+    try {
+      return await transcribeImage(buffer);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('OCR_ERROR', 'Document OCR processing failed', {
+        status: 422,
+        stage: 'ocr',
+        recoverable: true,
+      });
+    }
+  }
+
   try {
     const worker = await getWorker();
     const result = await worker.recognize(buffer, {}, { blocks: true });
