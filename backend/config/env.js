@@ -33,7 +33,7 @@ export function getConfig() {
     supabaseUrl,
     supabaseServiceKey,
     geminiApiKey: process.env.GEMINI_API_KEY || '',
-    geminiModel: process.env.GEMINI_MODEL || 'gemini-flash-latest',
+    geminiModel: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
     geminiTimeoutMs: Number(process.env.GEMINI_TIMEOUT_MS || 30000),
     databaseMode,
     highConfidenceThreshold: Number(process.env.HIGH_CONFIDENCE_THRESHOLD || 0.9),

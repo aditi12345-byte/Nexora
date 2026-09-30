@@ -3,6 +3,18 @@ import { getConfig } from '../../config/env.js';
 import { AppError, classifyExternalError } from '../../utils/errors.js';
 
 const MAX_OCR_CHARS = 20000;
+const FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
+
+function modelsToTry(preferred) {
+  return [...new Set([preferred, ...FALLBACK_MODELS].filter(Boolean))];
+}
+
+function retryableModelError(error) {
+  const status = Number(error?.status || error?.statusCode || 0);
+  const message = String(error?.message || '');
+  if (status === 401 || status === 403 || /api[_ ]key/i.test(message)) return false;
+  return status === 404 || status === 429 || status === 503 || /high demand|unavailable|no longer available|not found/i.test(message);
+}
 
 function buildPrompt(filename, ocrPages) {
   const pages = ocrPages.map((page) => `--- page ${page.page} ---\n${page.text || ''}`).join('\n\n');
@@ -73,29 +85,47 @@ export async function extractWithGemini({ filename, ocrPages }) {
 
   const { prompt, truncated } = buildPrompt(filename, ocrPages);
   const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
-
+  const models = modelsToTry(config.geminiModel);
   let response;
-  try {
-    response = await Promise.race([
-      ai.models.generateContent({
-        model: config.geminiModel,
-        contents: prompt,
-        config: {
-          temperature: 0,
-          responseMimeType: 'application/json',
-          maxOutputTokens: 4096,
-        },
-      }),
-      new Promise((_, reject) => {
-        setTimeout(() => {
-          const error = new Error('timeout');
-          error.name = 'TimeoutError';
-          reject(error);
-        }, config.geminiTimeoutMs);
-      }),
-    ]);
-  } catch (error) {
-    throw classifyExternalError(error, 'extraction');
+  let lastError;
+
+  for (const model of models) {
+    for (const includeThinking of [true, false]) {
+      try {
+        response = await Promise.race([
+          ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+              temperature: 0,
+              responseMimeType: 'application/json',
+              maxOutputTokens: 4096,
+              ...(includeThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+            },
+          }),
+          new Promise((_, reject) => {
+            setTimeout(() => {
+              const error = new Error('timeout');
+              error.name = 'TimeoutError';
+              reject(error);
+            }, config.geminiTimeoutMs);
+          }),
+        ]);
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        const invalidArgument = Number(error?.status) === 400 && /invalid argument/i.test(String(error?.message || ''));
+        if (invalidArgument && includeThinking) continue;
+        break;
+      }
+    }
+    if (response) break;
+    if (lastError && !retryableModelError(lastError) && !(Number(lastError.status) === 400)) break;
+  }
+
+  if (!response) {
+    throw classifyExternalError(lastError, 'extraction');
   }
 
   const parsed = parseModelJson(response?.text);

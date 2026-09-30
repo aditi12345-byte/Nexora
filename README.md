@@ -103,7 +103,7 @@ Row level security is enabled and no anon policies are granted. The API uses the
 
 Without the key, upload, validation, and OCR still run. The extraction stage stops with `CONFIGURATION_ERROR` and the document is marked `FAILED`. No fields are fabricated. Set the key and use Retry on the document page.
 
-The default model is `gemini-flash-latest`. Override it with `GEMINI_MODEL` if your account uses a different name.
+The default model is `gemini-3.1-flash-lite`. If that model is busy or rejects the request, the API tries `gemini-flash-lite-latest` and then `gemini-3.5-flash`. Override the first choice with `GEMINI_MODEL`.
 
 ## Local development
 
