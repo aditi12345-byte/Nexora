@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+uploads/
+logs/
+backend/data/
+coverage/
+*.traineddata
+.DS_Store
+*.log
