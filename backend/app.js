@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { getConfig } from './config/env.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import routes from './routes/index.js';
+import { sendSuccess } from './utils/response.js';
 
 export function createApp() {
   const config = getConfig();
@@ -22,6 +23,13 @@ export function createApp() {
     },
   }));
   app.use(express.json({ limit: '1mb' }));
+
+  app.get('/', (req, res) => {
+    sendSuccess(res, {
+      name: 'Nexora API',
+      health: '/api/health',
+    }, 'Nexora API is running');
+  });
 
   app.use('/api', routes);
   app.use(notFound);

@@ -64,6 +64,19 @@ test('protected routes reject missing and logged out tokens', async () => {
   }
 });
 
+test('the service root responds so a host health check is not a missing route', async () => {
+  const ctx = await bootApp();
+  try {
+    const response = await request(ctx.app).get('/');
+    assert.equal(response.status, 200);
+    assert.equal(response.body.success, true);
+    assert.equal(response.body.data.name, 'Nexora API');
+    assert.equal(response.body.data.health, '/api/health');
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
 test('health reports local database status without pretending Gemini is configured', async () => {
   const ctx = await bootApp();
   try {
