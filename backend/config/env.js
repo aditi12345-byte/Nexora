@@ -41,8 +41,8 @@ export function getConfig() {
     maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES || 10 * 1024 * 1024),
     maxPdfPages: Number(process.env.MAX_PDF_PAGES || 20),
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
-    dataDir: process.env.DATA_DIR || path.resolve(configDir, '../data'),
-    uploadDir: process.env.UPLOAD_DIR || path.resolve(configDir, '../uploads'),
+    dataDir: process.env.DATA_DIR || (process.env.VERCEL ? '/tmp/folio-data' : path.resolve(configDir, '../data')),
+    uploadDir: process.env.UPLOAD_DIR || (process.env.VERCEL ? '/tmp/folio-uploads' : path.resolve(configDir, '../uploads')),
     nodeEnv: process.env.NODE_ENV || 'development',
     authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX || 30),
   };

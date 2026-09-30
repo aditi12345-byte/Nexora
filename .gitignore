@@ -11,3 +11,4 @@ coverage/
 *.traineddata
 .DS_Store
 *.log
+.vercel/
