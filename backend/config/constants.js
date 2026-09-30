@@ -18,7 +18,16 @@ export const PROCESSING_STATUSES = [
   'VALIDATING_DATA',
 ];
 
-export const PROCESSABLE_STATUSES = ['QUEUED', 'FAILED', 'REVIEW_REQUIRED', 'PREPROCESSING'];
+export const PROCESSABLE_STATUSES = [
+  'QUEUED',
+  'FAILED',
+  'REVIEW_REQUIRED',
+  'PREPROCESSING',
+  'OCR_PROCESSING',
+  'EXTRACTING',
+  'VALIDATING',
+  'VALIDATING_DATA',
+];
 
 export const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 

@@ -7,6 +7,7 @@ import { getStore } from '../models/store.js';
 import { recordAudit } from '../services/audit/auditService.js';
 import { validateUploadedFile } from '../services/ingestion/fileValidation.js';
 import { processDocument } from '../services/pipeline/processDocument.js';
+import { readBytes, removeBytes, saveBytes } from '../services/storage/fileStore.js';
 import { AppError } from '../utils/errors.js';
 import { toPublicDocument } from '../utils/files.js';
 import { logError } from '../utils/logger.js';
@@ -43,10 +44,11 @@ export async function uploadDocument(req, res, next) {
     });
 
     const id = crypto.randomUUID();
-    const uploadDir = getConfig().uploadDir;
-    await fs.mkdir(uploadDir, { recursive: true });
-    const storagePath = path.join(uploadDir, `${id}${validated.extension}`);
-    await fs.writeFile(storagePath, req.file.buffer, { mode: 0o600 });
+    const storagePath = await saveBytes(
+      `documents/${id}${validated.extension}`,
+      req.file.buffer,
+      validated.mimeType,
+    );
 
     const now = new Date().toISOString();
     try {
@@ -89,7 +91,7 @@ export async function uploadDocument(req, res, next) {
       });
       sendSuccess(res, { document: toPublicDocument(document) }, 'Document uploaded successfully', 201);
     } catch (error) {
-      await fs.rm(storagePath, { force: true });
+      await removeBytes(storagePath);
       throw error;
     }
   } catch (error) {
@@ -129,10 +131,10 @@ export async function deleteDocument(req, res, next) {
     const document = await ownedDocument(req.params.id, req.user.sub);
     const pages = await getStore().listPages(document.id);
     await getStore().deleteDocument(document.id);
-    await fs.rm(document.storagePath, { force: true });
+    await removeBytes(document.storagePath);
     for (const page of pages) {
       if (page.imagePath && page.imagePath !== document.storagePath) {
-        await fs.rm(page.imagePath, { force: true });
+        await removeBytes(page.imagePath);
       }
     }
     await fs.rm(path.join(getConfig().uploadDir, 'pages', document.id), { recursive: true, force: true });
@@ -239,8 +241,9 @@ export async function getPageImage(req, res, next) {
         stage: 'ingestion',
       });
     }
+    const bytes = await readBytes(page.imagePath);
     res.setHeader('Content-Type', 'image/png');
-    res.sendFile(page.imagePath);
+    res.send(bytes);
   } catch (error) {
     next(error);
   }
@@ -249,7 +252,11 @@ export async function getPageImage(req, res, next) {
 export async function downloadOriginal(req, res, next) {
   try {
     const document = await ownedDocument(req.params.id, req.user.sub);
-    res.download(document.storagePath, document.originalName);
+    const bytes = await readBytes(document.storagePath);
+    const filename = document.originalName.replace(/["\r\n]/g, '');
+    res.setHeader('Content-Type', document.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(bytes);
   } catch (error) {
     next(error);
   }

@@ -68,7 +68,7 @@ export default function DocumentDetailsPage() {
       )}
       {actionError && <div className="mt-4"><Alert>{actionError}</Alert></div>}
       <div className="mt-4 flex flex-wrap gap-2">
-        {['QUEUED', 'FAILED', 'REVIEW_REQUIRED', 'PREPROCESSING'].includes(document.status) && (
+        {['QUEUED', 'FAILED', 'REVIEW_REQUIRED', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING', 'VALIDATING', 'VALIDATING_DATA'].includes(document.status) && (
           <button type="button" onClick={retry} disabled={pending} className="rounded-lg bg-moss px-3 py-2 text-sm text-white disabled:opacity-60">
             {pending ? 'Starting…' : document.status === 'QUEUED' ? 'Process' : 'Retry processing'}
           </button>

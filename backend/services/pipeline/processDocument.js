@@ -1,8 +1,5 @@
 import crypto from 'crypto';
-import fs from 'fs/promises';
-import path from 'path';
 import { PROCESSABLE_STATUSES } from '../../config/constants.js';
-import { getConfig } from '../../config/env.js';
 import { getStore } from '../../models/store.js';
 import { AppError, toAppError } from '../../utils/errors.js';
 import { recordAudit } from '../audit/auditService.js';
@@ -11,6 +8,7 @@ import { extractWithGemini } from '../extraction/geminiExtractor.js';
 import { layoutFromOcr } from '../layout/layoutService.js';
 import { recognizeImage, textLayerResult } from '../ocr/ocrService.js';
 import { preprocessDocument } from '../preprocessing/preprocess.js';
+import { readBytes, saveBytes } from '../storage/fileStore.js';
 import { needsHumanReview } from '../validation/confidence.js';
 import { validateExtraction } from '../validation/schemaValidation.js';
 
@@ -65,7 +63,7 @@ export async function processDocument(documentId, userId, deps = {}) {
       status: 'PREPROCESSING',
     });
 
-    const buffer = await fs.readFile(doc.storagePath);
+    const buffer = await readBytes(doc.storagePath);
     await setStatus(documentId, 'PREPROCESSING', {
       errorCode: null,
       errorMessage: null,
@@ -75,16 +73,12 @@ export async function processDocument(documentId, userId, deps = {}) {
     });
 
     const prepared = await preprocessDocument(buffer, doc.mimeType);
-    const uploadDir = getConfig().uploadDir;
-    const pageDir = path.join(uploadDir, 'pages', documentId);
-    await fs.mkdir(pageDir, { recursive: true });
 
     const pageRows = [];
     for (const page of prepared.pages) {
       let imagePath = null;
       if (page.pngBuffer) {
-        imagePath = path.join(pageDir, `${page.page}.png`);
-        await fs.writeFile(imagePath, page.pngBuffer, { mode: 0o600 });
+        imagePath = await saveBytes(`pages/${documentId}/${page.page}.png`, page.pngBuffer, 'image/png');
       }
       pageRows.push({
         id: crypto.randomUUID(),

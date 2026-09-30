@@ -1,4 +1,4 @@
-const API_ORIGIN = 'https://temporary-zippy-peridot-ept40ac.vercel.app';
+const API_ORIGIN = 'https://temporary-speedy-krypton-jpowuge.vercel.app';
 
 async function readBody(req) {
   if (req.body && typeof req.body === 'object') return JSON.stringify(req.body);
