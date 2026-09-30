@@ -26,7 +26,16 @@ api.interceptors.response.use(
 );
 
 export function errorMessage(error) {
-  return error?.response?.data?.error?.message || 'The request could not be completed.';
+  const apiMessage = error?.response?.data?.error?.message;
+  const details = error?.response?.data?.error?.details;
+  const detailText = Array.isArray(details)
+    ? details.map((item) => item?.message).filter(Boolean).join(' ')
+    : '';
+  if (apiMessage && detailText) return `${apiMessage} ${detailText}`;
+  if (apiMessage) return apiMessage;
+  const status = error?.response?.status;
+  if (status) return `The server rejected the request (${status}).`;
+  return 'The API could not be reached.';
 }
 
 export function errorDetails(error) {
